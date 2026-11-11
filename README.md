@@ -93,7 +93,7 @@ with **CMake FetchContent**. Both expose two build targets:
 ### Git submodule
 
 ```powershell
-git submodule add https://github.com/<owner>/breakpad-crash-handler.git 3rdparty/crash-handler
+git submodule add https://github.com/Andrey23525/breakpad-crash-handler.git 3rdparty/crash-handler
 git submodule update --init --recursive   # also fetches 3rdparty/breakpad
 ```
 
@@ -120,8 +120,14 @@ target_compile_definitions(my_app PRIVATE
 
 ```cmake
 include(FetchContent)
+
+# Override CRASH_* before MakeAvailable (see "Project configuration").
+set(CRASH_SUPPORT_EMAIL "support@mycompany.com" CACHE STRING "" FORCE)
+set(CRASH_UPLOAD_URL "https://crash.mycompany.com/api/upload" CACHE STRING "" FORCE)
+set(CRASH_PIPE_NAME "myapp_crash" CACHE STRING "" FORCE)
+
 FetchContent_Declare(breakpad_crash_handler
-    GIT_REPOSITORY https://github.com/<owner>/breakpad-crash-handler.git
+    GIT_REPOSITORY https://github.com/Andrey23525/breakpad-crash-handler.git
     GIT_TAG main
     GIT_SUBMODULES_RECURSE ON       # CMake ≥ 3.24: fetches 3rdparty/breakpad
 )

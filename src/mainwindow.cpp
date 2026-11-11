@@ -26,6 +26,7 @@ MainWindow::MainWindow(const QString& appName,
     , m_uploader(new Uploader(this))
 {
     buildUi();
+    applyStyle();
 
     if (m_monitor) {
         m_online = m_monitor->isOnline();
@@ -60,27 +61,37 @@ MainWindow::MainWindow(const QString& appName,
 
 void MainWindow::buildUi()
 {
+    setMinimumWidth(560);
+
     auto* central = new QWidget(this);
     auto* mainLayout = new QVBoxLayout(central);
+    mainLayout->setContentsMargins(24, 20, 24, 20);
+    mainLayout->setSpacing(14);
 
     m_headerLabel = new QLabel(central);
+    m_headerLabel->setObjectName(QStringLiteral("headerLabel"));
     m_headerLabel->setTextFormat(Qt::PlainText);
     mainLayout->addWidget(m_headerLabel);
 
     m_hintLabel = new QLabel(central);
+    m_hintLabel->setObjectName(QStringLiteral("hintLabel"));
     m_hintLabel->setTextFormat(Qt::PlainText);
     m_hintLabel->setVisible(false);
     m_hintLabel->setWordWrap(true);
     mainLayout->addWidget(m_hintLabel);
 
     auto* grid = new QGridLayout;
+    grid->setVerticalSpacing(8);
+    grid->setHorizontalSpacing(16);
+    grid->setColumnStretch(1, 1);
 
     auto addRow = [grid](int row, QLabel*& caption, QLabel*& value) {
         caption = new QLabel;
+        caption->setObjectName(QStringLiteral("captionLabel"));
         value = new QLabel;
         value->setTextInteractionFlags(Qt::TextSelectableByMouse);
-        grid->addWidget(caption, row, 0);
-        grid->addWidget(value, row, 1);
+        grid->addWidget(caption, row, 0, Qt::AlignTop);
+        grid->addWidget(value, row, 1, Qt::AlignTop);
     };
 
     addRow(0, m_appCaption, m_appValue);
@@ -92,11 +103,14 @@ void MainWindow::buildUi()
     addRow(6, m_timeCaption, m_timeValue);
     addRow(7, m_exitCodeCaption, m_exitCodeValue);
 
-    grid->setColumnStretch(1, 1);
     mainLayout->addLayout(grid);
 
     auto* buttonRow = new QHBoxLayout;
+    buttonRow->setSpacing(8);
+
     m_saveButton  = new QPushButton(central);
+    m_saveButton->setObjectName(QStringLiteral("primaryButton"));
+    m_saveButton->setDefault(true);
     m_emailButton = new QPushButton(central);
     m_devButton   = new QPushButton(central);
     m_closeButton = new QPushButton(central);
@@ -135,6 +149,40 @@ void MainWindow::retranslateUi()
     if (!m_hasCrash) {
         m_headerLabel->setText(tr("Waiting for a crash…"));
     }
+}
+
+void MainWindow::applyStyle()
+{
+    // Light Fluent-style look (Windows 11): bold header, muted captions, and
+    // rounded flat buttons with an accent primary action.
+    setStyleSheet(QStringLiteral(
+        "QLabel#headerLabel { font-size: 15pt; font-weight: 600; }"
+        "QLabel#captionLabel { color: #5f6368; }"
+        "QLabel#hintLabel { color: #5f6368; }"
+        "QPushButton {"
+        "    border: 1px solid #d1d1d1;"
+        "    border-radius: 4px;"
+        "    padding: 6px 18px;"
+        "}"
+        "QPushButton:hover { background: #f3f3f3; }"
+        "QPushButton:pressed { background: #e5e5e5; }"
+        "QPushButton#primaryButton {"
+        "    background: #0067c0;"
+        "    border-color: #0067c0;"
+        "    color: #ffffff;"
+        "}"
+        "QPushButton#primaryButton:hover { background: #1975c5; }"
+        "QPushButton#primaryButton:pressed { background: #005ba6; }"
+        "QPushButton:disabled {"
+        "    color: #a0a0a0;"
+        "    border-color: #e0e0e0;"
+        "    background: #fafafa;"
+        "}"
+        "QPushButton#primaryButton:disabled {"
+        "    background: #c7c7c7;"
+        "    border-color: #c7c7c7;"
+        "    color: #ffffff;"
+        "}"));
 }
 
 void MainWindow::onDumpRequested(quint32 pid, const QString& dumpPath)

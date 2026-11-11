@@ -2,8 +2,10 @@
 
 #include <QApplication>
 #include <QCommandLineParser>
+#include <QFont>
 #include <QLocale>
 #include <QMessageBox>
+#include <QStyleFactory>
 #include <QTranslator>
 
 #include "crashserver.h"
@@ -11,14 +13,17 @@
 #include "networkmonitor.h"
 #include "stringutils.h"
 
-// Installs the translation matching the system locale from the embedded
-// resource. Source language is English; Russian is shipped via
-// crash_handler_ru_RU.qm.
-static void installTranslators(QApplication& app)
+// Installs the translation matching the requested language (or the system
+// locale when none is forced) from the embedded resource. Source language is
+// English; Russian is shipped via crash_handler_ru_RU.qm.
+static void installTranslators(QApplication& app, const QString& forcedLanguage)
 {
     static QTranslator translator;
 
-    const QStringList languages = QLocale().uiLanguages();
+    const QStringList languages = forcedLanguage.isEmpty()
+        ? QLocale().uiLanguages()
+        : QStringList{forcedLanguage};
+
     for (const QString& lang : languages) {
         const QString full = QLocale(lang).name();
         if (translator.load(QStringLiteral("crash_handler_") + full,
@@ -42,7 +47,12 @@ int main(int argc, char* argv[])
     QApplication::setApplicationVersion(QStringLiteral("1.0.0"));
     QApplication::setQuitOnLastWindowClosed(true);
 
-    installTranslators(app);
+    // Windows 11 look: use the modern style when available and the Segoe UI
+    // font that Fluent uses.
+    if (QStyleFactory::keys().contains(QStringLiteral("windows11"))) {
+        QApplication::setStyle(QStringLiteral("windows11"));
+    }
+    QApplication::setFont(QFont(QStringLiteral("Segoe UI"), 9));
 
     QCommandLineParser parser;
     parser.setApplicationDescription(
@@ -62,8 +72,13 @@ int main(int argc, char* argv[])
     QCommandLineOption appNameOption(QStringLiteral("app-name"),
                                      QStringLiteral("Display name of the protected client"),
                                      QStringLiteral("name"));
-    parser.addOptions({pipeOption, dumpsOption, parentOption, appNameOption});
+    QCommandLineOption langOption(QStringLiteral("lang"),
+                                  QStringLiteral("Force the UI language (e.g. en, ru_RU)"),
+                                  QStringLiteral("locale"));
+    parser.addOptions({pipeOption, dumpsOption, parentOption, appNameOption, langOption});
     parser.process(app);
+
+    installTranslators(app, parser.value(langOption));
 
     QString pipeName = parser.value(pipeOption);
     if (pipeName.isEmpty()) {

@@ -31,6 +31,7 @@ public:
 private:
     void buildUi();
     void retranslateUi();
+    void applyStyle();
 
     void showCrash(const CrashReport& report);
     void showNoDump(quint32 pid, int exitCode);

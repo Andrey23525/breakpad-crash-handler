@@ -5,12 +5,13 @@
 # own (it uses autotools/gyp), so we compile the exact Windows source subset we
 # need directly.
 #
-# The crash handler is the *server* side of Breakpad's out-of-process crash
-# reporting: it only needs CrashGenerationServer + MinidumpGenerator, which
+# The crash handler itself is the *server* side of Breakpad's out-of-process
+# crash reporting: it needs CrashGenerationServer + MinidumpGenerator, which
 # write the minidump themselves via MiniDumpWriteDump (loaded dynamically from
-# dbghelp.dll). It does NOT need ExceptionHandler (the in-process client) and
-# does NOT need the symbol-processing library — minidump inspection is done in
-# this project with a lightweight reader in src/minidumpreader.cpp.
+# dbghelp.dll). The library also compiles the client-side pieces
+# (CrashGenerationClient + ExceptionHandler) so the demo/example clients can
+# link it. The symbol-processing library is not needed — minidump inspection is
+# done with a lightweight reader in src/minidumpreader.cpp.
 
 function(breakpad_add_client target)
     set(BP_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/breakpad/src")
@@ -24,6 +25,8 @@ function(breakpad_add_client target)
     set(BP_CLIENT_SOURCES
         ${BP_ROOT}/client/windows/crash_generation/client_info.cc
         ${BP_ROOT}/client/windows/crash_generation/crash_generation_server.cc
+        ${BP_ROOT}/client/windows/crash_generation/crash_generation_client.cc
+        ${BP_ROOT}/client/windows/handler/exception_handler.cc
         ${BP_ROOT}/client/windows/crash_generation/minidump_generator.cc
         ${BP_ROOT}/common/windows/guid_string.cc
         ${BP_ROOT}/common/windows/string_utils.cc

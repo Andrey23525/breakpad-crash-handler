@@ -29,9 +29,9 @@ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 
-The result is `build/crash_handler.exe`. It **must not** pass Guardant
-self-protection (see the symbiosis plan): it is a separate unprotected process
-that writes the dump itself via `MiniDumpWriteDump`.
+The result is `build/crash_handler.exe` — a standalone process that writes the
+dump itself via `MiniDumpWriteDump`. Keep it unprotected and independent of the
+application it watches.
 
 To run it outside the build machine, deploy the Qt DLLs next to the exe:
 
@@ -57,8 +57,11 @@ Arguments:
 | `--dumps`   | Directory to write minidumps into        |
 | `--parent`  | PID of the protected client (info only)  |
 | `--app-name`| Display name of the application          |
+| `--lang`    | Force the UI language (e.g. `en`, `ru_RU`) |
 
 ## UI
+
+![Crash handler window](media/crash_handler.png)
 
 - **Save snapshot…** — `QFileDialog` path selection, copies the dump.
   On failure a `QMessageBox::critical` is shown and the main window stays open.
@@ -71,6 +74,11 @@ The handler runs in parallel with the main application and **neither shows nor
 creates its window** until something happens to the main application: the
 window is created lazily (in `main.cpp`) only when a dump arrives or the client
 exits abnormally.
+
+## Examples
+
+See [examples/README.md](examples/README.md) for a minimal client that reports
+crashes to the handler and a launcher script for the handler.
 
 ## Localization (Qt Linguist)
 
@@ -106,8 +114,14 @@ src/
   pch.h               — precompiled header
 cmake/setup_qt.cmake  — Qt wiring (Qt6_ROOT, qt_standard_project_setup)
 cmake/Breakpad.cmake  — builds Breakpad from the submodule
+tests/demo_client.cpp — demo client that crashes to exercise the handler
+examples/
+  client/main.cpp         — example client (out-of-process ExceptionHandler)
+  handler/run_handler.ps1 — example handler launcher
 scripts/
   find-vsdevshell.ps1 — locates Launch-VsDevShell.ps1
+  screenshot-window.ps1 — captures a process window to a PNG
+media/crash_handler.png  — screenshot used in this README
 ```
 
 ## Project configuration (CMake variables)

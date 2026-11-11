@@ -33,6 +33,32 @@ include(cmake/setup_qt.cmake)
 include(cmake/Breakpad.cmake)
 breakpad_add_client(breakpad_client)
 
+# Demo client (test/screenshot tool): registers with the handler over a named
+# pipe and crashes on purpose. Not part of the shipped handler.
+add_executable(crash_demo_client
+    tests/demo_client.cpp
+)
+target_link_libraries(crash_demo_client PRIVATE breakpad_client)
+target_compile_definitions(crash_demo_client PRIVATE
+    NOMINMAX
+    WIN32_LEAN_AND_MEAN
+    UNICODE
+    _UNICODE
+)
+
+# Example client: demonstrates how a protected app reports crashes over the
+# pipe using Breakpad's out-of-process ExceptionHandler.
+add_executable(example_client
+    examples/client/main.cpp
+)
+target_link_libraries(example_client PRIVATE breakpad_client)
+target_compile_definitions(example_client PRIVATE
+    NOMINMAX
+    WIN32_LEAN_AND_MEAN
+    UNICODE
+    _UNICODE
+)
+
 qt_add_executable(crash_handler WIN32
     src/main.cpp
     src/crashserver.h

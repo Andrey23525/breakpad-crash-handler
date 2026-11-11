@@ -1,114 +1,121 @@
 # Breakpad Crash Handler
 
-Отдельное Qt-приложение (crash handler), которое принимает аварийные дампы от
-защищённого клиента по именованному каналу через Breakpad `CrashGenerationServer`,
-записывает минидамп и показывает окно с разбором сбоя и тремя действиями:
-сохранить снимок, отправить по email, отправить разработчику.
+A standalone Qt application (crash handler) that receives crash dumps from a
+protected client over a named pipe through Breakpad's
+`CrashGenerationServer`, writes a minidump, and shows a window with the crash
+breakdown and three actions: save the snapshot, send it by email, and send it
+to the developer.
 
-Breakpad подключён как git-субмодуль в `3rdparty/breakpad`.
+Breakpad is wired in as a git submodule under `3rdparty/breakpad`.
 
-## Сборка
+## Build
 
-Требования: CMake ≥ 3.21, Qt 6 (Widgets + Network + LinguistTools), MSVC
-(или совместимый компилятор). C++23.
+Requirements: CMake ≥ 3.21, Qt 6 (Widgets + Network + LinguistTools), MSVC
+(or a compatible compiler). C++23.
 
 ```powershell
-# 1. Выкачать субмодуль (Breakpad)
+# 1. Fetch the submodule (Breakpad)
 git submodule update --init --recursive
 
-# 2. Загрузить окружение MSVC (чтобы cl.exe был в PATH)
-& "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\Launch-VsDevShell.ps1" -Arch amd64
+# 2. Locate and load the MSVC environment (puts cl.exe on PATH)
+$vsDevShell = & ".\scripts\find-vsdevshell.ps1"
+& $vsDevShell -Arch amd64 -SkipAutomaticLocation
 
-# 3. Сконфигурировать (путь к Qt берётся из Qt6_ROOT в cmake/setup_qt.cmake,
-#    можно переопределить переменной окружения Qt6_ROOT)
+# 3. Configure (Qt path is taken from Qt6_ROOT in cmake/setup_qt.cmake;
+#    override it with the Qt6_ROOT environment variable)
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 
-# 4. Собрать
+# 4. Build
 cmake --build build
 ```
 
-Результат — `build/crash_handler.exe`. Он **не** должен проходить автозащиту
-Guardant (см. план симбиоза): это отдельный незащищённый процесс, который
-сам пишет дамп через `MiniDumpWriteDump`.
+The result is `build/crash_handler.exe`. It **must not** pass Guardant
+self-protection (see the symbiosis plan): it is a separate unprotected process
+that writes the dump itself via `MiniDumpWriteDump`.
 
-Для запуска вне сборочной машины разверните Qt DLL рядом с exe:
+To run it outside the build machine, deploy the Qt DLLs next to the exe:
 
 ```powershell
-& "C:\Work\libraries\Qt\6.10.2\msvc2022_64\bin\windeployqt.exe" --release --no-translations build\crash_handler.exe
+& "$env:Qt6_ROOT\bin\windeployqt.exe" --release --no-translations build\crash_handler.exe
 ```
 
-(переводы уже встроены в exe как ресурс, поэтому `--no-translations`).
+where `$env:Qt6_ROOT` points to your Qt installation (the same root
+`cmake/setup_qt.cmake` uses). Translations are already embedded in the exe as a
+resource, hence `--no-translations`.
 
-## Запуск
+## Run
 
 ```powershell
 crash_handler.exe --pipe=\\.\pipe\myapp_crash_123 --dumps=C:\dumps --app-name=MyApp
 ```
 
-Аргументы:
+Arguments:
 
-| Аргумент    | Назначение                              |
-|-------------|-----------------------------------------|
-| `--pipe`    | Имя именованного канала клиента         |
-| `--dumps`   | Каталог, куда писать минидампы          |
-| `--parent`  | PID защищённого клиента (инф.)          |
-| `--app-name`| Отображаемое имя приложения             |
+| Argument    | Purpose                                  |
+|-------------|------------------------------------------|
+| `--pipe`    | Named pipe of the client                 |
+| `--dumps`   | Directory to write minidumps into        |
+| `--parent`  | PID of the protected client (info only)  |
+| `--app-name`| Display name of the application          |
 
 ## UI
 
-- **Сохранить снимок…** — `QFileDialog` выбора пути, копирование дампа.
-  При ошибке показывается `QMessageBox::critical`, главное окно остаётся открытым.
-- **Отправить по email** — открывает почтовый клиент по умолчанию (`mailto:`).
-- **Отправить разработчику** — HTTP-мультипарт POST на endpoint из конфигурации.
-  Кнопка серая (`disabled`), если нет сети — состояние отслеживается через
-  `QNetworkInformation`.
+- **Save snapshot…** — `QFileDialog` path selection, copies the dump.
+  On failure a `QMessageBox::critical` is shown and the main window stays open.
+- **Send by email** — opens the default mail client (`mailto:`).
+- **Send to developer** — HTTP multipart POST to the configured endpoint.
+  The button is grey (`disabled`) when there is no network; state is tracked
+  via `QNetworkInformation`.
 
-Обработчик запускается параллельно с основным приложением и **не показывает и не
-создаёт своё окно**, пока с основным приложением что-то не случится: окно
-создаётся лениво (в `main.cpp`) только при поступлении дампа или аварийном
-завершении клиента.
+The handler runs in parallel with the main application and **neither shows nor
+creates its window** until something happens to the main application: the
+window is created lazily (in `main.cpp`) only when a dump arrives or the client
+exits abnormally.
 
-## Локализация (Qt Linguist)
+## Localization (Qt Linguist)
 
-Исходный язык — английский, все пользовательские строки обёрнуты в `tr()`.
-Перевод на русский лежит в `src/translations/crash_handler_ru_RU.ts`,
-компилируется в `.qm` и встраивается в exe как ресурс (`:/translations`) через
-`qt_add_translations`. Приложение выбирает перевод по системной локали.
+Source language is English, all user-facing strings are wrapped in `tr()`.
+The Russian translation lives in `src/translations/crash_handler_ru_RU.ts`,
+is compiled to `.qm` and embedded in the exe as a resource (`:/translations`)
+via `qt_add_translations`. The application picks the translation by the system
+locale.
 
-Добавить/обновить язык:
+To add or update a language:
 
 ```powershell
-# перегенерировать .ts из исходников
+# regenerate the .ts from the sources
 lupdate src -ts src/translations/crash_handler_ru_RU.ts
 
-# перевести в Qt Linguist, затем собрать заново (lrelease запускает CMake)
+# translate in Qt Linguist, then rebuild (lrelease is run by CMake)
 cmake --build build
 ```
 
-## Структура
+## Structure
 
 ```
 src/
-  main.cpp            — точка входа, разбор аргументов, переводы
-  mainwindow.{h,cpp}  — окно и три действия
-  crashserver.{h,cpp} — обёртка CrashGenerationServer (сигналы)
-  minidumpreader.*    — лёгкий разбор дампа (исключение + модуль)
-  senders.{h,cpp}     — email (mailto) и HTTP-загрузка
-  networkmonitor.*    — слежение за доступностью сети
-  crashreport.h       — данные одного сбоя
-  project_config.h.in — шаблон констант (генерируется CMake в project_config.h)
-  stringutils.h       — мелкие строковые помощники
-  pch.h               — прекомпилируемый заголовок
-cmake/setup_qt.cmake  — подключение Qt (Qt6_ROOT, qt_standard_project_setup)
-cmake/Breakpad.cmake  — сборка breakpad из субмодуля
+  main.cpp            — entry point, argument parsing, translations
+  mainwindow.{h,cpp}  — the window and the three actions
+  crashserver.{h,cpp} — CrashGenerationServer wrapper (signals)
+  minidumpreader.*    — lightweight dump parsing (exception + module)
+  senders.{h,cpp}     — email (mailto) and HTTP upload
+  networkmonitor.*    — network availability tracking
+  crashreport.h       — data for a single crash
+  project_config.h.in — constants template (generated by CMake into project_config.h)
+  stringutils.h       — small string helpers
+  pch.h               — precompiled header
+cmake/setup_qt.cmake  — Qt wiring (Qt6_ROOT, qt_standard_project_setup)
+cmake/Breakpad.cmake  — builds Breakpad from the submodule
+scripts/
+  find-vsdevshell.ps1 — locates Launch-VsDevShell.ps1
 ```
 
-## Настройка проекта (CMake-переменные)
+## Project configuration (CMake variables)
 
-Все константы, описывающие проект (email, endpoint, имя канала и т.д.), задаются
-CMake-переменными `CRASH_*` в корневом `CMakeLists.txt` и вшиваются в
-`project_config.h` на этапе конфигурации (`configure_file`). Переопределяются
-при конфигурации:
+All project-describing constants (email, endpoint, pipe name, etc.) are set by
+`CRASH_*` CMake variables in the top-level `CMakeLists.txt` and baked into
+`project_config.h` at configure time (`configure_file`). Override them at
+configure time:
 
 ```powershell
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release `
@@ -118,10 +125,10 @@ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release `
   -DCRASH_PIPE_NAME="myapp_crash"
 ```
 
-| Переменная                 | Значение по умолчанию                  | Назначение |
-|----------------------------|----------------------------------------|------------|
-| `CRASH_SUPPORT_EMAIL`      | `support@example.com`                  | Получатель «Отправить по email» |
-| `CRASH_UPLOAD_URL`         | `https://crash.example.com/api/upload` | Endpoint «Отправить разработчику» |
-| `CRASH_PRODUCT_NAME`       | `YourApp`                              | Имя приложения по умолчанию |
-| `CRASH_PIPE_NAME`          | `crash_handler`                        | Имя канала (без префикса `\\.\pipe\`) |
-| `CRASH_UPLOAD_FIELD_*`     | `product` / `report` / `dump`          | Поля multipart-формы |
+| Variable                  | Default                                | Purpose |
+|---------------------------|----------------------------------------|---------|
+| `CRASH_SUPPORT_EMAIL`     | `support@example.com`                  | Recipient of "Send by email" |
+| `CRASH_UPLOAD_URL`        | `https://crash.example.com/api/upload` | Endpoint of "Send to developer" |
+| `CRASH_PRODUCT_NAME`      | `YourApp`                              | Default application name |
+| `CRASH_PIPE_NAME`         | `crash_handler`                        | Pipe name (without the `\\.\pipe\` prefix) |
+| `CRASH_UPLOAD_FIELD_*`    | `product` / `report` / `dump`          | Multipart form field names |

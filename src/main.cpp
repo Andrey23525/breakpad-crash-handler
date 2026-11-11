@@ -15,7 +15,8 @@
 
 // Installs the translation matching the requested language (or the system
 // locale when none is forced) from the embedded resource. Source language is
-// English; Russian is shipped via crash_handler_ru_RU.qm.
+// English; Russian and Simplified Chinese ship via crash_handler_ru_RU.qm and
+// crash_handler_zh_CN.qm.
 static void installTranslators(QApplication& app, const QString& forcedLanguage)
 {
     static QTranslator translator;

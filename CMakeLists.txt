@@ -103,6 +103,7 @@ target_compile_definitions(crash_handler PRIVATE
 qt_add_translations(crash_handler
     TS_FILES
         src/translations/crash_handler_ru_RU.ts
+        src/translations/crash_handler_zh_CN.ts
     RESOURCE_PREFIX "/translations"
     SOURCE_TARGETS crash_handler
 )

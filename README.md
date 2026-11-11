@@ -57,7 +57,7 @@ Arguments:
 | `--dumps`   | Directory to write minidumps into        |
 | `--parent`  | PID of the protected client (info only)  |
 | `--app-name`| Display name of the application          |
-| `--lang`    | Force the UI language (e.g. `en`, `ru_RU`) |
+| `--lang`    | Force the UI language (e.g. `en`, `ru_RU`, `zh_CN`) |
 
 ## UI
 
@@ -80,19 +80,87 @@ exits abnormally.
 See [examples/README.md](examples/README.md) for a minimal client that reports
 crashes to the handler and a launcher script for the handler.
 
+## Using this project in another project
+
+This repository can be pulled into a parent project as a **git submodule** or
+with **CMake FetchContent**. Both expose two build targets:
+
+- `crash_handler` — the GUI handler executable.
+- `breakpad_client` — a static library wrapping Breakpad's
+  `ExceptionHandler` / `CrashGenerationServer`, for apps that report crashes
+  over the pipe.
+
+### Git submodule
+
+```powershell
+git submodule add https://github.com/<owner>/breakpad-crash-handler.git 3rdparty/crash-handler
+git submodule update --init --recursive   # also fetches 3rdparty/breakpad
+```
+
+Then in your `CMakeLists.txt`:
+
+```cmake
+# Override CRASH_* before add_subdirectory (see "Project configuration").
+set(CRASH_SUPPORT_EMAIL "support@mycompany.com" CACHE STRING "" FORCE)
+set(CRASH_UPLOAD_URL "https://crash.mycompany.com/api/upload" CACHE STRING "" FORCE)
+set(CRASH_PIPE_NAME "myapp_crash" CACHE STRING "" FORCE)
+
+add_subdirectory(3rdparty/crash-handler)
+
+# Ship the handler exe alongside your app.
+add_dependencies(my_app crash_handler)
+
+# Report crashes from your app through Breakpad's ExceptionHandler.
+target_link_libraries(my_app PRIVATE breakpad_client)
+target_compile_definitions(my_app PRIVATE
+    NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
+```
+
+### CMake FetchContent
+
+```cmake
+include(FetchContent)
+FetchContent_Declare(breakpad_crash_handler
+    GIT_REPOSITORY https://github.com/<owner>/breakpad-crash-handler.git
+    GIT_TAG main
+    GIT_SUBMODULES_RECURSE ON       # CMake ≥ 3.24: fetches 3rdparty/breakpad
+)
+FetchContent_MakeAvailable(breakpad_crash_handler)
+```
+
+`GIT_SUBMODULES_RECURSE` needs CMake ≥ 3.24. With an older CMake, clone the
+repository manually, run `git submodule update --init --recursive` inside it,
+and point FetchContent at the local checkout with `SOURCE_DIR` instead of
+`GIT_REPOSITORY`. The `crash_handler` / `breakpad_client` targets are then
+available exactly as in the submodule case.
+
+Notes:
+
+- The submodule's own `CMakeLists.txt` also builds demo/example executables
+  (`crash_demo_client`, `example_client`). These are not part of the shipped
+  handler; ignore them or build only the targets you need.
+- The top-level `CMakeLists.txt` sets `CMAKE_CXX_STANDARD 23` globally, so the
+  parent project must compile with C++23 (or override the variable on its own
+  targets).
+- Qt 6 (Widgets + Network + LinguistTools) must be discoverable by the parent
+  build; `cmake/setup_qt.cmake` reads `Qt6_ROOT` (default
+  `C:/Work/libraries/Qt/6.10.2/msvc2022_64/`, override with the `Qt6_ROOT`
+  environment variable).
+
 ## Localization (Qt Linguist)
 
 Source language is English, all user-facing strings are wrapped in `tr()`.
-The Russian translation lives in `src/translations/crash_handler_ru_RU.ts`,
-is compiled to `.qm` and embedded in the exe as a resource (`:/translations`)
-via `qt_add_translations`. The application picks the translation by the system
+Translations live in `src/translations/`: `crash_handler_ru_RU.ts` (Russian)
+and `crash_handler_zh_CN.ts` (Simplified Chinese). They are compiled to `.qm`
+and embedded in the exe as a resource (`:/translations`) via
+`qt_add_translations`. The application picks the translation by the system
 locale.
 
 To add or update a language:
 
 ```powershell
 # regenerate the .ts from the sources
-lupdate src -ts src/translations/crash_handler_ru_RU.ts
+lupdate src -ts src/translations/crash_handler_ru_RU.ts src/translations/crash_handler_zh_CN.ts
 
 # translate in Qt Linguist, then rebuild (lrelease is run by CMake)
 cmake --build build

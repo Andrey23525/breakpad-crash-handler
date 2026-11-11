@@ -1,0 +1,21 @@
+# Build directories
+/build/
+/cmake-build-*/
+out/
+*.user
+
+# Qt generated
+*.qm
+moc_*
+qrc_*
+ui_*.h
+
+# MSVC
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.dll
+*.exe
+.vs/

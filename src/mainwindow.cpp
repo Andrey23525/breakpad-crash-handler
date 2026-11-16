@@ -2,6 +2,7 @@
 
 #include "mainwindow.h"
 
+#include <QCloseEvent>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -25,8 +26,17 @@ MainWindow::MainWindow(const QString& appName,
     , m_monitor(monitor)
     , m_uploader(new Uploader(this))
 {
+    setWindowFlag(Qt::WindowStaysOnTopHint);
+    setWindowFlag(Qt::MSWindowsFixedSizeDialogHint);
+    setWindowFlag(Qt::WindowMaximizeButtonHint, false);
     buildUi();
     applyStyle();
+
+    m_closeLock.setSingleShot(true);
+    m_closeLock.setTimerType(Qt::PreciseTimer);
+    connect(&m_closeLock, &QTimer::timeout, this, [this] {
+        m_closeButton->setEnabled(true);
+    });
 
     if (m_monitor) {
         m_online = m_monitor->isOnline();
@@ -61,8 +71,6 @@ MainWindow::MainWindow(const QString& appName,
 
 void MainWindow::buildUi()
 {
-    setMinimumWidth(560);
-
     auto* central = new QWidget(this);
     auto* mainLayout = new QVBoxLayout(central);
     mainLayout->setContentsMargins(24, 20, 24, 20);
@@ -242,9 +250,7 @@ void MainWindow::showCrash(const CrashReport& report)
     m_exitCodeValue->setText(QStringLiteral("—"));
 
     updateActions();
-    show();
-    raise();
-    activateWindow();
+    showReport();
 }
 
 void MainWindow::showNoDump(quint32 pid, int exitCode)
@@ -270,9 +276,30 @@ void MainWindow::showNoDump(quint32 pid, int exitCode)
     m_exitCodeValue->setText(formatExitCode(exitCode));
 
     updateActions();
-    show();
+    showReport();
+}
+
+void MainWindow::showReport()
+{
+    setFixedSize(sizeHint().expandedTo(QSize(560, 0)));
+    if (!isVisible()) {
+        m_closeButton->setEnabled(false);
+        m_closeLock.start(10000);
+    }
+    if (!isVisible() || isMinimized()) {
+        showNormal();
+    }
     raise();
     activateWindow();
+}
+
+void MainWindow::closeEvent(QCloseEvent* event)
+{
+    if (m_closeLock.isActive()) {
+        event->ignore();
+        return;
+    }
+    QMainWindow::closeEvent(event);
 }
 
 void MainWindow::updateActions()

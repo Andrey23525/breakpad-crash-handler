@@ -7,6 +7,7 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QTimer>
 
 #include "crashreport.h"
 
@@ -29,12 +30,14 @@ public:
     void onClientExited(quint32 pid, int exitCode);
 
 private:
+    void closeEvent(QCloseEvent* event) override;
     void buildUi();
     void retranslateUi();
     void applyStyle();
 
     void showCrash(const CrashReport& report);
     void showNoDump(quint32 pid, int exitCode);
+    void showReport();
     void updateActions();
 
     void saveSnapshot();
@@ -75,6 +78,7 @@ private:
     CrashReport m_report;
     bool        m_hasCrash = false;
     bool        m_online   = true;
+    QTimer      m_closeLock;
 
     // Dependencies.
     NetworkMonitor* m_monitor  = nullptr;

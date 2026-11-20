@@ -244,7 +244,8 @@ For integration, use `crash_handler::Client` from `crash_handler/client.h`.
 The library owns the report socket and ptrace setup.
 Linux currently reports dump requests only. The client wrapper stops and reaps
 its handler on normal destruction.
-Linux compilation and runtime validation have not yet been performed.
+Linux compilation, client lifecycle, and real SIGSEGV minidump generation are
+verified by the Docker Compose test below (Ubuntu 26.04, GCC 15.2, Qt 6.10.2).
 
 ## Cross-platform client API
 
@@ -273,3 +274,22 @@ the handler running to display its report. The public API has no Qt dependency.
 CMake selects the Windows or Linux implementation. Windows waits for the named
 pipe; Linux verifies exec success, while server initialization occurs
 asynchronously. A successful constructor on Linux does not certify GUI startup.
+
+### Linux verification with Docker Compose
+
+Initialize the Breakpad submodule, then run:
+
+```sh
+docker compose build linux-test
+docker compose run --rm linux-test
+```
+
+The Ubuntu 26.04 test image supplies GCC, Qt, and a pinned Linux syscall support
+revision. It builds all targets, runs the public API lifecycle test, and crashes
+the shared example. The test validates the minidump signature, SIGSEGV exception
+stream, and nonempty thread list. Qt runs offscreen; this checks dump generation
+rather than the appearance of the desktop UI.
+
+The test service grants SYS_PTRACE for Breakpad inside the container. It runs as
+a non-root user and does not mount host directories or the Docker socket.
+Builds and dumps stay in the disposable container.

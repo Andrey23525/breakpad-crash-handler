@@ -44,8 +44,11 @@ Client::Client(const std::filesystem::path& executable,
     if (impl_->child == 0) {
         close(client);
         close(status[0]);
-        execl(executable.c_str(), executable.c_str(), "--server-fd", fd.c_str(),
-              "--dumps", dumpDirectory.c_str(), static_cast<char*>(nullptr));
+        // Breakpad creates the server endpoint with FD_CLOEXEC. Preserve only
+        // this endpoint across exec so the handler receives the report channel.
+        if (fcntl(server, F_SETFD, 0) == 0)
+            execl(executable.c_str(), executable.c_str(), "--server-fd", fd.c_str(),
+                  "--dumps", dumpDirectory.c_str(), static_cast<char*>(nullptr));
         const int error = errno;
         const auto ignored = write(status[1], &error, sizeof(error));
         (void)ignored;

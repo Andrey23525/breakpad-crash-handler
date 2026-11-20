@@ -79,6 +79,7 @@ private:
     bool        m_hasCrash = false;
     bool        m_online   = true;
     QTimer      m_closeLock;
+    QTimer      m_closeProgressTimer;
 
     // Dependencies.
     NetworkMonitor* m_monitor  = nullptr;

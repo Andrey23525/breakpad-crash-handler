@@ -10,13 +10,63 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMessageBox>
+#include <QPainterPath>
 #include <QPushButton>
+#include <QStyleOptionButton>
+#include <QStylePainter>
 #include <QVBoxLayout>
 
 #include "minidumpreader.h"
 #include "networkmonitor.h"
 #include "senders.h"
 #include "stringutils.h"
+
+namespace {
+constexpr int closeLockDurationMs = 5000;
+
+class CloseButton : public QPushButton
+{
+public:
+    using QPushButton::QPushButton;
+
+    void setProgress(qreal progress)
+    {
+        m_progress = progress;
+        update();
+    }
+
+protected:
+    void paintEvent(QPaintEvent* event) override
+    {
+        if (m_progress <= 0) {
+            QPushButton::paintEvent(event);
+            return;
+        }
+
+        QStyleOptionButton option;
+        initStyleOption(&option);
+        QStylePainter painter(this);
+        painter.drawControl(QStyle::CE_PushButtonBevel, option);
+
+        const QRectF interior = QRectF(rect()).adjusted(1, 1, -1, -1);
+        QPainterPath outline;
+        outline.addRoundedRect(interior, 3, 3);
+        painter.save();
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setClipPath(outline);
+        QRectF fill = interior;
+        fill.setWidth(interior.width() * m_progress);
+        painter.fillRect(fill, QColor(QStringLiteral("#f4aaaa")));
+        painter.restore();
+
+        option.palette.setColor(QPalette::Disabled, QPalette::ButtonText, QColor(55, 55, 55));
+        painter.drawControl(QStyle::CE_PushButtonLabel, option);
+    }
+
+private:
+    qreal m_progress = 0;
+};
+}
 
 MainWindow::MainWindow(const QString& appName,
                        NetworkMonitor* monitor,
@@ -34,7 +84,17 @@ MainWindow::MainWindow(const QString& appName,
 
     m_closeLock.setSingleShot(true);
     m_closeLock.setTimerType(Qt::PreciseTimer);
-    connect(&m_closeLock, &QTimer::timeout, this, [this] {
+    auto* closeButton = static_cast<CloseButton*>(m_closeButton);
+    m_closeProgressTimer.setInterval(16);
+    connect(&m_closeProgressTimer, &QTimer::timeout, this, [this, closeButton] {
+        const int remaining = m_closeLock.remainingTime();
+        if (remaining >= 0) {
+            closeButton->setProgress(1.0 - qreal(remaining) / closeLockDurationMs);
+        }
+    });
+    connect(&m_closeLock, &QTimer::timeout, this, [this, closeButton] {
+        m_closeProgressTimer.stop();
+        closeButton->setProgress(1);
         m_closeButton->setEnabled(true);
     });
 
@@ -121,7 +181,7 @@ void MainWindow::buildUi()
     m_saveButton->setDefault(true);
     m_emailButton = new QPushButton(central);
     m_devButton   = new QPushButton(central);
-    m_closeButton = new QPushButton(central);
+    m_closeButton = new CloseButton(central);
 
     buttonRow->addWidget(m_saveButton);
     buttonRow->addWidget(m_emailButton);
@@ -283,8 +343,10 @@ void MainWindow::showReport()
 {
     setFixedSize(sizeHint().expandedTo(QSize(560, 0)));
     if (!isVisible()) {
+        static_cast<CloseButton*>(m_closeButton)->setProgress(0);
         m_closeButton->setEnabled(false);
-        m_closeLock.start(10000);
+        m_closeLock.start(closeLockDurationMs);
+        m_closeProgressTimer.start();
     }
     if (!isVisible() || isMinimized()) {
         showNormal();

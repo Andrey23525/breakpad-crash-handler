@@ -35,6 +35,7 @@ breakpad_add_client(breakpad_client)
 
 # Demo client (test/screenshot tool): registers with the handler over a named
 # pipe and crashes on purpose. Not part of the shipped handler.
+if(WIN32)
 add_executable(crash_demo_client
     tests/demo_client.cpp
 )
@@ -59,10 +60,18 @@ target_compile_definitions(example_client PRIVATE
     _UNICODE
 )
 
+else()
+    add_executable(example_client examples/client/linux.cpp)
+    target_link_libraries(example_client PRIVATE breakpad_client)
+    add_executable(crash_demo_client examples/client/linux.cpp)
+    target_link_libraries(crash_demo_client PRIVATE breakpad_client)
+endif()
+
 qt_add_executable(crash_handler WIN32
     src/main.cpp
     src/crashserver.h
-    src/crashserver.cpp
+    $<$<PLATFORM_ID:Windows>:src/crashserver.cpp>
+    $<$<PLATFORM_ID:Linux>:src/crashserver_linux.cpp>
     src/crashreport.h
     src/minidumpreader.h
     src/minidumpreader.cpp

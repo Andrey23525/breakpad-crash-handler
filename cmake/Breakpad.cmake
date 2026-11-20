@@ -22,6 +22,38 @@ function(breakpad_add_client target)
             "    git submodule update --init --recursive")
     endif()
 
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        if(NOT EXISTS "${BP_ROOT}/third_party/lss/linux_syscall_support.h")
+            message(FATAL_ERROR "Missing Linux syscall support. See Linux setup in README.md")
+        endif()
+        find_package(Threads REQUIRED)
+        set(BP_CLIENT_SOURCES
+            ${BP_ROOT}/client/linux/crash_generation/crash_generation_client.cc
+            ${BP_ROOT}/client/linux/crash_generation/crash_generation_server.cc
+            ${BP_ROOT}/client/linux/dump_writer_common/thread_info.cc
+            ${BP_ROOT}/client/linux/dump_writer_common/ucontext_reader.cc
+            ${BP_ROOT}/client/linux/handler/exception_handler.cc
+            ${BP_ROOT}/client/linux/handler/minidump_descriptor.cc
+            ${BP_ROOT}/client/linux/log/log.cc
+            ${BP_ROOT}/client/linux/microdump_writer/microdump_writer.cc
+            ${BP_ROOT}/client/linux/minidump_writer/linux_core_dumper.cc
+            ${BP_ROOT}/client/linux/minidump_writer/linux_dumper.cc
+            ${BP_ROOT}/client/linux/minidump_writer/linux_ptrace_dumper.cc
+            ${BP_ROOT}/client/linux/minidump_writer/minidump_writer.cc
+            ${BP_ROOT}/client/linux/minidump_writer/pe_file.cc
+            ${BP_ROOT}/client/minidump_file_writer.cc
+            ${BP_ROOT}/common/convert_UTF.cc
+            ${BP_ROOT}/common/md5.cc
+            ${BP_ROOT}/common/string_conversion.cc
+            ${BP_ROOT}/common/linux/elf_core_dump.cc
+            ${BP_ROOT}/common/linux/elfutils.cc
+            ${BP_ROOT}/common/linux/file_id.cc
+            ${BP_ROOT}/common/linux/guid_creator.cc
+            ${BP_ROOT}/common/linux/linux_libc_support.cc
+            ${BP_ROOT}/common/linux/memory_mapped_file.cc
+            ${BP_ROOT}/common/linux/safe_readlink.cc
+        )
+    elseif(WIN32)
     set(BP_CLIENT_SOURCES
         ${BP_ROOT}/client/windows/crash_generation/client_info.cc
         ${BP_ROOT}/client/windows/crash_generation/crash_generation_server.cc
@@ -32,7 +64,16 @@ function(breakpad_add_client target)
         ${BP_ROOT}/common/windows/string_utils.cc
     )
 
+    else()
+        message(FATAL_ERROR "Supported platforms: Windows and Linux")
+    endif()
+
     add_library(${target} STATIC ${BP_CLIENT_SOURCES})
+
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        target_link_libraries(${target} PUBLIC Threads::Threads)
+        target_compile_definitions(${target} PRIVATE HAVE_GETCONTEXT=1)
+    endif()
 
     # Breakpad's main branch uses C++20 features (std::erase_if, designated
     # initializers); pin it there rather than the project-wide C++23 default.

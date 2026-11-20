@@ -9,6 +9,8 @@
 #include <QObject>
 #include <QString>
 #include <string>
+#include <expected>
+#include <memory>
 
 namespace google_breakpad {
 class CrashGenerationServer;
@@ -38,9 +40,15 @@ signals:
     void clientExited(quint32 pid, int exitCode);
 
 private:
+    #ifdef _WIN32
+    using DumpPath = std::wstring;
+    #else
+    using DumpPath = std::string;
+    int m_fd = -1;
+    #endif
     static void onDumpRequest(void* ctx,
                               const google_breakpad::ClientInfo* info,
-                              const std::wstring* path);
+                              const DumpPath* path);
     static void onClientExit(void* ctx,
                              const google_breakpad::ClientInfo* info);
 

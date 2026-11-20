@@ -220,3 +220,30 @@ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release `
 | `CRASH_PRODUCT_NAME`      | `YourApp`                              | Default application name |
 | `CRASH_PIPE_NAME`         | `crash_handler`                        | Pipe name (without the `\\.\pipe\` prefix) |
 | `CRASH_UPLOAD_FIELD_*`    | `product` / `report` / `dump`          | Multipart form field names |
+
+
+## Linux
+
+Linux uses Breakpad's inherited `SOCK_SEQPACKET` report channel instead of a
+Windows named pipe. Build with a C++23 compiler supporting `std::expected`
+(e.g. GCC 13+), CMake 3.21+, pthreads and the Qt components listed in
+`cmake/setup_qt.cmake`. Initialize the Breakpad submodule and its Linux syscall
+support dependency before building.
+
+```sh
+git submodule update --init --recursive
+git clone https://chromium.googlesource.com/linux-syscall-support 3rdparty/breakpad/src/third_party/lss
+cmake -S . -B build-linux -DCMAKE_BUILD_TYPE=Release
+cmake --build build-linux -j
+./build-linux/example_client ./build-linux/crash_handler /tmp/crash-dumps
+```
+
+The example creates the report channel, forks and execs the GUI handler with
+`--server-fd`, grants that specific process ptrace permission, then raises
+SIGSEGV. A successful run writes a `.dmp` and opens the crash report window.
+A graphical Qt session is required. `crash_demo_client` uses the same Linux example.
+For integration, follow `examples/client/linux.cpp`; preserve the server socket
+across exec and pass the client socket to Breakpad's ExceptionHandler.
+Linux currently reports dump requests only: automatic clean-exit detection is
+not implemented, so the application must stop its handler on normal shutdown.
+Linux compilation and runtime validation have not yet been performed.

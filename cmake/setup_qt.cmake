@@ -8,7 +8,9 @@ set(CMAKE_MAP_IMPORTED_CONFIG_MINSIZEREL "Release")
 set(CMAKE_MAP_IMPORTED_CONFIG_RELWITHDEBINFO "RelWithDebInfo;Release;")
 
 # Qt location; override with the Qt6_ROOT environment variable if needed.
-set(Qt6_ROOT "C:/Work/libraries/Qt/6.10.2/msvc2022_64/")
+if(WIN32 AND NOT DEFINED Qt6_ROOT)
+    set(Qt6_ROOT "C:/Work/libraries/Qt/6.10.2/msvc2022_64/")
+endif()
 if(DEFINED ENV{Qt6_ROOT})
     set(Qt6_ROOT $ENV{Qt6_ROOT})
 endif()

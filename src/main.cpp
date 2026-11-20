@@ -53,7 +53,9 @@ int main(int argc, char* argv[])
     if (QStyleFactory::keys().contains(QStringLiteral("windows11"))) {
         QApplication::setStyle(QStringLiteral("windows11"));
     }
+#ifdef Q_OS_WIN
     QApplication::setFont(QFont(QStringLiteral("Segoe UI"), 9));
+#endif
 
     QCommandLineParser parser;
     parser.setApplicationDescription(
@@ -77,6 +79,11 @@ int main(int argc, char* argv[])
                                   QStringLiteral("Force the UI language (e.g. en, ru_RU)"),
                                   QStringLiteral("locale"));
     parser.addOptions({pipeOption, dumpsOption, parentOption, appNameOption, langOption});
+#ifdef Q_OS_LINUX
+    QCommandLineOption serverFdOption(QStringLiteral("server-fd"),
+        QStringLiteral("Inherited Breakpad server socket descriptor"), QStringLiteral("fd"));
+    parser.addOption(serverFdOption);
+#endif
     parser.process(app);
 
     installTranslators(app, parser.value(langOption));
@@ -86,6 +93,10 @@ int main(int argc, char* argv[])
         pipeName = QStringLiteral("\\\\.\\pipe\\")
             + StringUtils::fromUtf8(constants::pipeName);
     }
+
+#ifdef Q_OS_LINUX
+    pipeName = parser.value(serverFdOption);
+#endif
 
     const QString dumpDir = parser.value(dumpsOption);
     const QString appName = parser.value(appNameOption).isEmpty()

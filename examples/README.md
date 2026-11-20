@@ -1,35 +1,29 @@
 # Examples
 
-Two minimal examples showing the crash handler used end to end.
+Both platforms use the same invocation:
 
-## Client
-
-`client/main.cpp` is the "protected application" side. It registers with the
-crash handler over a named pipe using Breakpad's out-of-process
-`ExceptionHandler`, then crashes on purpose.
-
-Build it from the repository root (see the top-level README):
-
-```powershell
-cmake --build build --target example_client
+```text
+example_client <crash_handler executable> <dump directory>
 ```
 
-Run the handler first, then the client:
+The client starts the handler and deliberately crashes. The handler writes a
+minidump and opens its report window. A graphical Qt session is required.
 
+Windows:
 ```powershell
-# terminal 1 — the handler
-.\examples\handler\run_handler.ps1
-
-# terminal 2 — the client (crashes and pops the handler window)
-.\build\example_client.exe \\.\pipe\example_crash
+cmake --build build --target example_client crash_handler
+.\build\example_client.exe .\build\crash_handler.exe "$env:TEMP\example dumps"
 ```
 
-The handler shows its window and writes the minidump into the directory set by
-`run_handler.ps1` (default `%TEMP%\example_dumps`).
+Linux:
+```sh
+cmake --build build-linux --target example_client crash_handler
+./build-linux/example_client ./build-linux/crash_handler "/tmp/example dumps"
+```
 
-## Handler usage
+Windows uses a unique named pipe and waits up to ten seconds for the handler.
+Linux passes an inherited report socket and grants the handler ptrace permission.
+See client/main.cpp and client/linux.cpp for the platform implementations.
 
-`handler/run_handler.ps1` launches the built `crash_handler.exe` with a named
-pipe and a dump directory. Adjust `-Pipe`, `-Dumps`, and `-AppName` to match
-your integration. A clean exit of the client produces no window; a crash or an
-abnormal exit makes the handler show its window.
+The Windows handler/run_handler.ps1 script remains available for integrations
+that start the server separately; the example client now starts its own server.

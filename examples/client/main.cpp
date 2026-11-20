@@ -1,40 +1,65 @@
-// main.cpp
-//
-// Minimal example of a client that reports crashes to the out-of-process
-// Breakpad crash handler over a named pipe. Build with the root CMake project
-// (target `example_client`), run the handler first, then crash this client.
-
-#include <cwchar>
+#include <cstdio>
 #include <string>
-
 #include "client/windows/handler/exception_handler.h"
+
+// Quote one Windows command-line argument, including trailing backslashes.
+static std::wstring quote(const std::wstring& value)
+{
+    std::wstring result = L"\"";
+    size_t slashes = 0;
+    for (wchar_t c : value) {
+        if (c == L'\\') { ++slashes; continue; }
+        result.append(c == L'"' ? slashes * 2 + 1 : slashes, L'\\');
+        slashes = 0;
+        result += c;
+    }
+    result.append(slashes * 2, L'\\');
+    return result + L"\"";
+}
 
 int wmain(int argc, wchar_t* argv[])
 {
-    if (argc < 2) {
-        wprintf(L"usage: example_client.exe <pipe-name>\n");
+    if (argc != 3) {
+        fwprintf(stderr, L"usage: %s <crash_handler executable> <dump directory>\n", argv[0]);
         return 1;
     }
-
-    const std::wstring pipeName = argv[1];
-
-    // Register with the crash handler. Supplying a pipe name selects
-    // out-of-process dump generation: the handler (server) writes the minidump.
+    const std::wstring pipe = L"\\\\.\\pipe\\example_crash_" + std::to_wstring(GetCurrentProcessId());
+    std::wstring command = quote(argv[1]) + L" --pipe " + quote(pipe)
+        + L" --dumps " + quote(argv[2]);
+    STARTUPINFOW startup{};
+    startup.cb = sizeof(startup);
+    PROCESS_INFORMATION process{};
+    if (!CreateProcessW(argv[1], command.data(), nullptr, nullptr, FALSE,
+                        CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process)) {
+        fwprintf(stderr, L"Cannot launch crash handler: %lu\n", GetLastError());
+        return 1;
+    }
+    CloseHandle(process.hThread);
+    const ULONGLONG deadline = GetTickCount64() + 10000;
+    bool ready = false;
+    while (GetTickCount64() < deadline) {
+        if (WaitForSingleObject(process.hProcess, 0) != WAIT_TIMEOUT) break;
+        if (WaitNamedPipeW(pipe.c_str(), 100)) { ready = true; break; }
+        Sleep(10);
+    }
+    if (!ready) {
+        fwprintf(stderr, L"Crash handler did not become ready\n");
+        TerminateProcess(process.hProcess, 1);
+        CloseHandle(process.hProcess);
+        return 1;
+    }
     google_breakpad::ExceptionHandler handler(
-        L".",                                            // dump path (unused out-of-process)
-        nullptr,                                         // filter callback
-        nullptr,                                         // minidump callback
-        nullptr,                                         // callback context
-        google_breakpad::ExceptionHandler::HANDLER_ALL,  // handler types
-        MiniDumpNormal,                                  // dump type
-        pipeName.c_str(),                                // named pipe -> out-of-process
-        nullptr);                                        // custom client info
-
-    // Application code goes here. Dereference a null pointer to demonstrate a
-    // crash: the handler shows its window and writes the dump to its --dumps
-    // directory.
+        L".", nullptr, nullptr, nullptr,
+        google_breakpad::ExceptionHandler::HANDLER_ALL,
+        MiniDumpNormal, pipe.c_str(), nullptr);
+    if (!handler.IsOutOfProcess()) {
+        fwprintf(stderr, L"Cannot register with crash handler\n");
+        TerminateProcess(process.hProcess, 1);
+        CloseHandle(process.hProcess);
+        return 1;
+    }
+    CloseHandle(process.hProcess);
     volatile int* p = nullptr;
     *p = 42;
-
     return 0;
 }

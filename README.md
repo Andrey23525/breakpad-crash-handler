@@ -110,10 +110,8 @@ add_subdirectory(3rdparty/crash-handler)
 # Ship the handler exe alongside your app.
 add_dependencies(my_app crash_handler)
 
-# Report crashes from your app through Breakpad's ExceptionHandler.
-target_link_libraries(my_app PRIVATE breakpad_client)
-target_compile_definitions(my_app PRIVATE
-    NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
+# The same client API on Windows and Linux.
+target_link_libraries(my_app PRIVATE crash_handler::client)
 ```
 
 ### CMake FetchContent
@@ -137,7 +135,7 @@ FetchContent_MakeAvailable(breakpad_crash_handler)
 `GIT_SUBMODULES_RECURSE` needs CMake ≥ 3.24. With an older CMake, clone the
 repository manually, run `git submodule update --init --recursive` inside it,
 and point FetchContent at the local checkout with `SOURCE_DIR` instead of
-`GIT_REPOSITORY`. The `crash_handler` / `breakpad_client` targets are then
+`GIT_REPOSITORY`. The `crash_handler` / `crash_handler::client` targets are then
 available exactly as in the submodule case.
 
 Notes:
@@ -242,8 +240,36 @@ The example creates the report channel, forks and execs the GUI handler with
 `--server-fd`, grants that specific process ptrace permission, then raises
 SIGSEGV. A successful run writes a `.dmp` and opens the crash report window.
 A graphical Qt session is required. `crash_demo_client` uses the same Linux example.
-For integration, follow `examples/client/linux.cpp`; preserve the server socket
-across exec and pass the client socket to Breakpad's ExceptionHandler.
-Linux currently reports dump requests only: automatic clean-exit detection is
-not implemented, so the application must stop its handler on normal shutdown.
+For integration, use `crash_handler::Client` from `crash_handler/client.h`.
+The library owns the report socket and ptrace setup.
+Linux currently reports dump requests only. The client wrapper stops and reaps
+its handler on normal destruction.
 Linux compilation and runtime validation have not yet been performed.
+
+## Cross-platform client API
+
+Link your application to `crash_handler::client` and include
+`<crash_handler/client.h>`. No platform macros or Breakpad headers are needed:
+
+```cpp
+#include <crash_handler/client.h>
+
+int runApplication(const std::filesystem::path& handlerExecutable,
+                   const std::filesystem::path& dumpDirectory)
+{
+    crash_handler::Client crashHandler(handlerExecutable, dumpDirectory);
+    return runYourApplication();
+}
+```
+
+Pass the deployed handler executable path (including its platform-specific
+filename) from application configuration. Paths use native filesystem encoding.
+Construct one client early in main, before starting application threads, and
+keep it alive until normal shutdown. Construction throws `std::runtime_error`
+on launch/setup failure. The object is noncopyable and nonmovable; destruction
+uninstalls Breakpad and stops its child process. A crashed application leaves
+the handler running to display its report. The public API has no Qt dependency.
+
+CMake selects the Windows or Linux implementation. Windows waits for the named
+pipe; Linux verifies exec success, while server initialization occurs
+asynchronously. A successful constructor on Linux does not certify GUI startup.

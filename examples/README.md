@@ -23,7 +23,8 @@ cmake --build build-linux --target example_client crash_handler
 
 Windows uses a unique named pipe and waits up to ten seconds for the handler.
 Linux passes an inherited report socket and grants the handler ptrace permission.
-See client/main.cpp and client/linux.cpp for the platform implementations.
+Both builds compile client/main.cpp, which uses only crash_handler::Client.
+Platform implementations are private to src/client and selected by CMake.
 
 The Windows handler/run_handler.ps1 script remains available for integrations
 that start the server separately; the example client now starts its own server.

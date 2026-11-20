@@ -19,7 +19,6 @@
 #include "minidumpreader.h"
 #include "networkmonitor.h"
 #include "senders.h"
-#include "stringutils.h"
 
 namespace {
 constexpr int closeLockDurationMs = 5000;
@@ -68,13 +67,13 @@ private:
 };
 }
 
-MainWindow::MainWindow(const QString& appName,
+MainWindow::MainWindow(const HandlerConfiguration& configuration,
                        NetworkMonitor* monitor,
                        QWidget* parent)
     : QMainWindow(parent)
-    , m_appName(appName)
+    , m_configuration(configuration)
     , m_monitor(monitor)
-    , m_uploader(new Uploader(this))
+    , m_uploader(new Uploader(configuration, this))
 {
     setWindowFlag(Qt::WindowStaysOnTopHint);
     setWindowFlag(Qt::MSWindowsFixedSizeDialogHint);
@@ -261,7 +260,7 @@ void MainWindow::onDumpRequested(quint32 pid, const QString& dumpPath)
 
     CrashReport report;
     report.pid       = pid;
-    report.appName   = m_appName;
+    report.appName   = m_configuration.productName;
     report.dumpPath  = dumpPath;
     report.hasDump   = true;
     report.crashTime = QDateTime::currentDateTime();
@@ -269,7 +268,7 @@ void MainWindow::onDumpRequested(quint32 pid, const QString& dumpPath)
     auto parsed = MinidumpUtils::read(dumpPath);
     if (parsed) {
         parsed->pid       = pid;
-        parsed->appName   = m_appName;
+        parsed->appName   = m_configuration.productName;
         parsed->crashTime = report.crashTime;
         report = std::move(*parsed);
     }
@@ -316,7 +315,7 @@ void MainWindow::showCrash(const CrashReport& report)
 void MainWindow::showNoDump(quint32 pid, int exitCode)
 {
     m_report.pid      = pid;
-    m_report.appName  = m_appName;
+    m_report.appName  = m_configuration.productName;
     m_report.hasDump  = false;
     m_report.exitCode = exitCode;
     m_report.crashTime = QDateTime::currentDateTime();
@@ -326,7 +325,7 @@ void MainWindow::showNoDump(quint32 pid, int exitCode)
     m_hintLabel->setText(tr("The application may have been terminated by the protection or externally. No dump was created."));
     m_hintLabel->setVisible(true);
 
-    m_appValue->setText(m_appName);
+    m_appValue->setText(m_configuration.productName);
     m_pidValue->setText(QString::number(pid));
     m_exceptionValue->setText(QStringLiteral("—"));
     m_moduleValue->setText(QStringLiteral("—"));
@@ -406,7 +405,7 @@ void MainWindow::saveSnapshot()
 
 void MainWindow::sendEmail()
 {
-    QString body = tr("Crash snapshot of application %1.\n\n").arg(m_appName);
+    QString body = tr("Crash snapshot of application %1.\n\n").arg(m_configuration.productName);
     body += QStringLiteral("pid: %1\n").arg(m_report.pid);
 
     if (m_report.hasDump) {
@@ -421,8 +420,8 @@ void MainWindow::sendEmail()
     }
 
     const auto result = EmailUtils::openInMailClient(
-        StringUtils::fromUtf8(constants::supportEmail),
-        tr("Crash snapshot (%1)").arg(m_appName),
+        m_configuration.supportEmail,
+        tr("Crash snapshot (%1)").arg(m_configuration.productName),
         body);
 
     if (!result) {

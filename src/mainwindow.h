@@ -10,6 +10,7 @@
 #include <QTimer>
 
 #include "crashreport.h"
+#include "handlerconfiguration.h"
 
 class NetworkMonitor;
 class Uploader;
@@ -20,7 +21,7 @@ class MainWindow final : public QMainWindow {
     Q_OBJECT
 
 public:
-    explicit MainWindow(const QString& appName,
+    explicit MainWindow(const HandlerConfiguration& configuration,
                         NetworkMonitor* monitor,
                         QWidget* parent = nullptr);
 
@@ -74,7 +75,7 @@ private:
     QPushButton* m_closeButton = nullptr;
 
     // State.
-    QString     m_appName;
+    HandlerConfiguration m_configuration;
     CrashReport m_report;
     bool        m_hasCrash = false;
     bool        m_online   = true;

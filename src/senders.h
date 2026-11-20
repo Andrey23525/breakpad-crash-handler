@@ -11,6 +11,7 @@
 #include <QObject>
 
 #include "crashreport.h"
+#include "handlerconfiguration.h"
 
 class EmailUtils {
 public:
@@ -25,7 +26,7 @@ class Uploader final : public QObject {
     Q_OBJECT
 
 public:
-    explicit Uploader(QObject* parent = nullptr);
+    explicit Uploader(const HandlerConfiguration& configuration, QObject* parent = nullptr);
 
     // Uploads |report| (with the dump attached when present).
     void send(const CrashReport& report);
@@ -37,5 +38,6 @@ signals:
 private:
     QString buildSummary(const CrashReport& report) const;
 
+    HandlerConfiguration m_configuration;
     QNetworkAccessManager m_manager;
 };

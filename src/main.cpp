@@ -9,6 +9,7 @@
 #include <QTranslator>
 
 #include "crashserver.h"
+#include "handlerconfiguration.h"
 #include "mainwindow.h"
 #include "networkmonitor.h"
 #include "stringutils.h"
@@ -39,6 +40,12 @@ static void installTranslators(QApplication& app, const QString& forcedLanguage)
             return;
         }
     }
+}
+
+// Values supplied by the protected application win over the compiled defaults.
+static QString valueOrDefault(const QString& value, std::string_view fallback)
+{
+    return value.isEmpty() ? StringUtils::fromUtf8(fallback) : value;
 }
 
 int main(int argc, char* argv[])
@@ -75,10 +82,27 @@ int main(int argc, char* argv[])
     QCommandLineOption appNameOption(QStringLiteral("app-name"),
                                      QStringLiteral("Display name of the protected client"),
                                      QStringLiteral("name"));
+    QCommandLineOption supportEmailOption(QStringLiteral("support-email"),
+                                          QStringLiteral("Support email for the email action"),
+                                          QStringLiteral("address"));
+    QCommandLineOption uploadUrlOption(QStringLiteral("upload-url"),
+                                       QStringLiteral("Endpoint for the developer upload"),
+                                       QStringLiteral("url"));
+    QCommandLineOption uploadFieldProductOption(QStringLiteral("upload-field-product"),
+                                                QStringLiteral("Multipart field for the product"),
+                                                QStringLiteral("name"));
+    QCommandLineOption uploadFieldReportOption(QStringLiteral("upload-field-report"),
+                                               QStringLiteral("Multipart field for the report"),
+                                               QStringLiteral("name"));
+    QCommandLineOption uploadFieldDumpOption(QStringLiteral("upload-field-dump"),
+                                             QStringLiteral("Multipart field for the dump"),
+                                             QStringLiteral("name"));
     QCommandLineOption langOption(QStringLiteral("lang"),
                                   QStringLiteral("Force the UI language (e.g. en, ru_RU)"),
                                   QStringLiteral("locale"));
-    parser.addOptions({pipeOption, dumpsOption, parentOption, appNameOption, langOption});
+    parser.addOptions({pipeOption, dumpsOption, parentOption, appNameOption,
+                       supportEmailOption, uploadUrlOption, uploadFieldProductOption,
+                       uploadFieldReportOption, uploadFieldDumpOption, langOption});
 #ifdef Q_OS_LINUX
     QCommandLineOption serverFdOption(QStringLiteral("server-fd"),
         QStringLiteral("Inherited Breakpad server socket descriptor"), QStringLiteral("fd"));
@@ -99,15 +123,26 @@ int main(int argc, char* argv[])
 #endif
 
     const QString dumpDir = parser.value(dumpsOption);
-    const QString appName = parser.value(appNameOption).isEmpty()
-        ? StringUtils::fromUtf8(constants::productName)
-        : parser.value(appNameOption);
 
     if (dumpDir.isEmpty()) {
         QMessageBox::critical(nullptr, QStringLiteral("Breakpad Crash Handler"),
                               QStringLiteral("Missing --dumps argument."));
         return 1;
     }
+
+    HandlerConfiguration configuration;
+    configuration.productName = valueOrDefault(parser.value(appNameOption),
+                                               constants::productName);
+    configuration.supportEmail = valueOrDefault(parser.value(supportEmailOption),
+                                                constants::supportEmail);
+    configuration.uploadUrl = valueOrDefault(parser.value(uploadUrlOption),
+                                             constants::uploadUrl);
+    configuration.uploadFieldProduct = valueOrDefault(parser.value(uploadFieldProductOption),
+                                                     constants::uploadFieldProduct);
+    configuration.uploadFieldReport = valueOrDefault(parser.value(uploadFieldReportOption),
+                                                    constants::uploadFieldReport);
+    configuration.uploadFieldDump = valueOrDefault(parser.value(uploadFieldDumpOption),
+                                                   constants::uploadFieldDump);
 
     auto* server = new CrashServer(&app);
     auto* monitor = new NetworkMonitor(&app);
@@ -117,7 +152,7 @@ int main(int argc, char* argv[])
     MainWindow* window = nullptr;
     auto ensureWindow = [&]() -> MainWindow* {
         if (!window) {
-            window = new MainWindow(appName, monitor);
+            window = new MainWindow(configuration, monitor);
             window->setAttribute(Qt::WA_DeleteOnClose);
         }
         return window;

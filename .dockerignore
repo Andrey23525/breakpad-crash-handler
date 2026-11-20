@@ -1,0 +1,12 @@
+.git
+**/.git
+build*
+out
+media
+.env*
+*.exe
+*.dll
+*.obj
+*.pdb
+*.lib
+*.ilk

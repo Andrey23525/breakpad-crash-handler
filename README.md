@@ -293,3 +293,21 @@ rather than the appearance of the desktop UI.
 The test service grants SYS_PTRACE for Breakpad inside the container. It runs as
 a non-root user and does not mount host directories or the Docker socket.
 Builds and dumps stay in the disposable container.
+
+### Headless AI and CI tests
+
+`BUILD_TESTING=ON` (the CTest default) enables `client_lifecycle`. The test sets
+`QT_QPA_PLATFORM=offscreen` on Windows and Linux, including in the child handler.
+On Windows, building `client_lifecycle_test` copies Qt runtime DLLs and the matching
+`Qt6::QOffscreenIntegrationPlugin` into the test executable directory (`platforms/`).
+This applies only to tests; normal application startup keeps Qt's default platform.
+
+```sh
+cmake -S . -B build-test -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release
+cmake --build build-test --target client_lifecycle_test
+ctest --test-dir build-test -C Release --output-on-failure
+```
+
+Use a configured MSVC developer shell and set `Qt6_ROOT` on Windows. To run the
+Linux container regression, including a real SIGSEGV and minidump validation,
+run `docker compose run --build --rm linux-test`.

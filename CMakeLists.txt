@@ -132,6 +132,21 @@ if(BUILD_TESTING)
     add_executable(client_lifecycle_test tests/client_lifecycle.cpp)
     target_link_libraries(client_lifecycle_test PRIVATE crash_handler::client)
     add_dependencies(client_lifecycle_test crash_handler)
+    if(WIN32)
+        # windeployqt defaults to qwindows; AI/CI tests explicitly use offscreen.
+        if(NOT TARGET Qt6::QOffscreenIntegrationPlugin)
+            message(FATAL_ERROR "BUILD_TESTING requires the Qt offscreen platform plugin")
+        endif()
+        add_custom_command(TARGET client_lifecycle_test POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_RUNTIME_DLLS:crash_handler> $<TARGET_FILE_DIR:crash_handler>
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_FILE_DIR:crash_handler>/platforms"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_FILE:Qt6::QOffscreenIntegrationPlugin>
+                "$<TARGET_FILE_DIR:crash_handler>/platforms"
+            COMMAND_EXPAND_LISTS VERBATIM)
+    endif()
     add_test(NAME client_lifecycle COMMAND client_lifecycle_test
         $<TARGET_FILE:crash_handler> "${CMAKE_CURRENT_BINARY_DIR}/lifecycle dumps")
     set_tests_properties(client_lifecycle PROPERTIES

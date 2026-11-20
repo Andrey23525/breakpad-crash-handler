@@ -47,25 +47,28 @@ target_compile_definitions(crash_demo_client PRIVATE
     _UNICODE
 )
 
-# Example client: demonstrates how a protected app reports crashes over the
-# pipe using Breakpad's out-of-process ExceptionHandler.
-add_executable(example_client
-    examples/client/main.cpp
-)
-target_link_libraries(example_client PRIVATE breakpad_client)
-target_compile_definitions(example_client PRIVATE
-    NOMINMAX
-    WIN32_LEAN_AND_MEAN
-    UNICODE
-    _UNICODE
-)
-
 else()
-    add_executable(example_client examples/client/linux.cpp)
-    target_link_libraries(example_client PRIVATE breakpad_client)
-    add_executable(crash_demo_client examples/client/linux.cpp)
-    target_link_libraries(crash_demo_client PRIVATE breakpad_client)
+    add_executable(crash_demo_client examples/client/main.cpp)
+    target_link_libraries(crash_demo_client PRIVATE crash_handler_client)
 endif()
+
+add_library(crash_handler_client STATIC)
+add_library(crash_handler::client ALIAS crash_handler_client)
+if(WIN32)
+    target_sources(crash_handler_client PRIVATE src/client/windows.cpp)
+    target_compile_definitions(crash_handler_client PRIVATE
+        NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_sources(crash_handler_client PRIVATE src/client/linux.cpp)
+else()
+    message(FATAL_ERROR "Crash handler client supports Windows and Linux")
+endif()
+target_include_directories(crash_handler_client PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_compile_features(crash_handler_client PUBLIC cxx_std_23)
+target_link_libraries(crash_handler_client PRIVATE breakpad_client)
+
+add_executable(example_client examples/client/main.cpp)
+target_link_libraries(example_client PRIVATE crash_handler::client)
 
 qt_add_executable(crash_handler WIN32
     src/main.cpp
@@ -122,4 +125,15 @@ if(MSVC)
     target_compile_options(crash_handler PRIVATE /W4 /utf-8)
 else()
     target_compile_options(crash_handler PRIVATE -Wall -Wextra)
+endif()
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(client_lifecycle_test tests/client_lifecycle.cpp)
+    target_link_libraries(client_lifecycle_test PRIVATE crash_handler::client)
+    add_dependencies(client_lifecycle_test crash_handler)
+    add_test(NAME client_lifecycle COMMAND client_lifecycle_test
+        $<TARGET_FILE:crash_handler> "${CMAKE_CURRENT_BINARY_DIR}/lifecycle dumps")
+    set_tests_properties(client_lifecycle PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 30)
 endif()

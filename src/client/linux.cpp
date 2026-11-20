@@ -3,12 +3,23 @@
 #include <csignal>
 #include <stdexcept>
 #include <string>
+#include <vector>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/prctl.h>
 #include <sys/wait.h>
 #include "client/linux/crash_generation/crash_generation_server.h"
 #include "client/linux/handler/exception_handler.h"
+
+// Empty values are left out so the handler can fall back to its built-in defaults.
+static void appendOption(std::vector<std::string>& arguments, const char* name,
+                         const std::string& value)
+{
+    if (value.empty())
+        return;
+    arguments.emplace_back(name);
+    arguments.emplace_back(value);
+}
 
 namespace crash_handler {
 struct Client::Impl {
@@ -25,7 +36,8 @@ struct Client::Impl {
     }
 };
 Client::Client(const std::filesystem::path& executable,
-               const std::filesystem::path& dumpDirectory)
+               const std::filesystem::path& dumpDirectory,
+               const Configuration& configuration)
     : impl_(std::make_unique<Impl>())
 {
     std::filesystem::create_directories(dumpDirectory);
@@ -38,8 +50,25 @@ Client::Client(const std::filesystem::path& executable,
         close(server);
         throw std::runtime_error("Cannot create startup channel");
     }
-    // Allocate before fork; the child only invokes async-signal-safe functions.
-    const std::string fd = std::to_string(server);
+    // The child only invokes async-signal-safe functions, so the complete
+    // argument vector is built before fork.
+    std::vector<std::string> arguments;
+    arguments.emplace_back(executable.string());
+    arguments.emplace_back("--server-fd");
+    arguments.emplace_back(std::to_string(server));
+    arguments.emplace_back("--dumps");
+    arguments.emplace_back(dumpDirectory.string());
+    appendOption(arguments, "--app-name", configuration.productName);
+    appendOption(arguments, "--support-email", configuration.supportEmail);
+    appendOption(arguments, "--upload-url", configuration.uploadUrl);
+    appendOption(arguments, "--upload-field-product", configuration.uploadFieldProduct);
+    appendOption(arguments, "--upload-field-report", configuration.uploadFieldReport);
+    appendOption(arguments, "--upload-field-dump", configuration.uploadFieldDump);
+    std::vector<char*> argv;
+    argv.reserve(arguments.size() + 1);
+    for (std::string& argument : arguments)
+        argv.push_back(argument.data());
+    argv.push_back(nullptr);
     impl_->child = fork();
     if (impl_->child == 0) {
         close(client);
@@ -47,8 +76,7 @@ Client::Client(const std::filesystem::path& executable,
         // Breakpad creates the server endpoint with FD_CLOEXEC. Preserve only
         // this endpoint across exec so the handler receives the report channel.
         if (fcntl(server, F_SETFD, 0) == 0)
-            execl(executable.c_str(), executable.c_str(), "--server-fd", fd.c_str(),
-                  "--dumps", dumpDirectory.c_str(), static_cast<char*>(nullptr));
+            execv(executable.c_str(), argv.data());
         const int error = errno;
         const auto ignored = write(status[1], &error, sizeof(error));
         (void)ignored;

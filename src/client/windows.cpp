@@ -19,6 +19,27 @@ static std::wstring quote(const std::wstring& value)
     return result + L"\"";
 }
 
+// The handler command line is UTF-16; project values arrive as UTF-8.
+static std::wstring widen(const std::string& value)
+{
+    if (value.empty())
+        return {};
+    const int size = MultiByteToWideChar(CP_UTF8, 0, value.data(), static_cast<int>(value.size()),
+                                         nullptr, 0);
+    std::wstring result(static_cast<size_t>(size), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, value.data(), static_cast<int>(value.size()),
+                        result.data(), size);
+    return result;
+}
+
+// Empty values are left out so the handler can fall back to its built-in defaults.
+static void appendOption(std::wstring& command, const wchar_t* name, const std::string& value)
+{
+    const std::wstring widened = widen(value);
+    if (!widened.empty())
+        command += L" " + std::wstring(name) + L" " + quote(widened);
+}
+
 namespace crash_handler {
 struct Client::Impl {
     HANDLE process = nullptr;
@@ -34,7 +55,8 @@ struct Client::Impl {
     }
 };
 Client::Client(const std::filesystem::path& executable,
-               const std::filesystem::path& dumpDirectory)
+               const std::filesystem::path& dumpDirectory,
+               const Configuration& configuration)
     : impl_(std::make_unique<Impl>())
 {
     std::filesystem::create_directories(dumpDirectory);
@@ -42,6 +64,12 @@ Client::Client(const std::filesystem::path& executable,
         std::to_wstring(GetCurrentProcessId());
     std::wstring command = quote(executable.wstring()) + L" --pipe " + quote(pipe)
         + L" --dumps " + quote(dumpDirectory.wstring());
+    appendOption(command, L"--app-name", configuration.productName);
+    appendOption(command, L"--support-email", configuration.supportEmail);
+    appendOption(command, L"--upload-url", configuration.uploadUrl);
+    appendOption(command, L"--upload-field-product", configuration.uploadFieldProduct);
+    appendOption(command, L"--upload-field-report", configuration.uploadFieldReport);
+    appendOption(command, L"--upload-field-dump", configuration.uploadFieldDump);
     STARTUPINFOW startup{};
     startup.cb = sizeof(startup);
     PROCESS_INFORMATION process{};

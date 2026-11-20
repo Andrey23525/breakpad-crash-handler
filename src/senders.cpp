@@ -5,8 +5,6 @@
 #include <QFile>
 #include <QUrl>
 
-#include "stringutils.h"
-
 std::expected<void, QString> EmailUtils::openInMailClient(const QString& recipient,
                                                           const QString& subject,
                                                           const QString& body)
@@ -26,13 +24,14 @@ std::expected<void, QString> EmailUtils::openInMailClient(const QString& recipie
     return {};
 }
 
-Uploader::Uploader(QObject* parent)
+Uploader::Uploader(const HandlerConfiguration& configuration, QObject* parent)
     : QObject(parent)
+    , m_configuration(configuration)
 {}
 
 void Uploader::send(const CrashReport& report)
 {
-    const QUrl url(StringUtils::fromUtf8(constants::uploadUrl));
+    const QUrl url(m_configuration.uploadUrl);
     if (!url.isValid()) {
         emit finished(false, QStringLiteral("invalid upload URL"));
         return;
@@ -43,14 +42,14 @@ void Uploader::send(const CrashReport& report)
     QHttpPart productPart;
     productPart.setHeader(QNetworkRequest::ContentDispositionHeader,
                           QVariant(QStringLiteral("form-data; name=\"%1\"")
-                                       .arg(StringUtils::fromUtf8(constants::uploadFieldProduct))));
+                                       .arg(m_configuration.uploadFieldProduct)));
     productPart.setBody(report.appName.toUtf8());
     multiPart->append(productPart);
 
     QHttpPart reportPart;
     reportPart.setHeader(QNetworkRequest::ContentDispositionHeader,
                          QVariant(QStringLiteral("form-data; name=\"%1\"")
-                                      .arg(StringUtils::fromUtf8(constants::uploadFieldReport))));
+                                      .arg(m_configuration.uploadFieldReport)));
     reportPart.setBody(buildSummary(report).toUtf8());
     multiPart->append(reportPart);
 
@@ -58,7 +57,7 @@ void Uploader::send(const CrashReport& report)
         QHttpPart dumpPart;
         dumpPart.setHeader(QNetworkRequest::ContentDispositionHeader,
                            QVariant(QStringLiteral("form-data; name=\"%1\"; filename=\"crash.dmp\"")
-                                        .arg(StringUtils::fromUtf8(constants::uploadFieldDump))));
+                                        .arg(m_configuration.uploadFieldDump)));
         dumpPart.setHeader(QNetworkRequest::ContentTypeHeader,
                            QVariant(QStringLiteral("application/octet-stream")));
 

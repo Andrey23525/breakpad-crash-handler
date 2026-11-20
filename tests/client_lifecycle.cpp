@@ -6,9 +6,17 @@ int main(int argc, char** argv)
 {
     if (argc != 3) return 2;
     try {
-        // Normal destruction must allow initialization again in the same process.
+        // Project values are forwarded to the handler at startup; a normal
+        // destruction must allow initialization again in the same process.
+        crash_handler::Configuration configuration;
+        configuration.productName = "Client lifecycle test";
+        configuration.supportEmail = "test@example.invalid";
+        configuration.uploadUrl = "https://example.invalid/api/upload";
+        configuration.uploadFieldProduct = "product";
+        configuration.uploadFieldReport = "report";
+        configuration.uploadFieldDump = "dump";
         for (int i = 0; i != 2; ++i) {
-            crash_handler::Client client(argv[1], argv[2]);
+            crash_handler::Client client(argv[1], argv[2], configuration);
         }
         try {
             crash_handler::Client invalid(
